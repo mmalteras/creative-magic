@@ -49,7 +49,20 @@ export default function Layout({ children, currentPageName }) {
       }
     };
     fetchUserAndGrantCredits();
-  }, [location.pathname]);
+
+    // Listen for auth state changes (OAuth redirects, sign in, sign out)
+    const { data: { subscription } } = User.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        fetchUserAndGrantCredits();
+      } else if (event === 'SIGNED_OUT') {
+        setUser(null);
+      }
+    });
+
+    return () => {
+      subscription?.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     const protectedPages = ['MyGallery', 'Fonts', 'Analyze', 'Upload', 'Editor', 'CreativeHub', 'Business']; // Added 'Business'
