@@ -9,13 +9,12 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { LogIn, Rocket, Mail, Loader2, ArrowRight, Check, Eye, EyeOff } from "lucide-react";
+import { LogIn, Rocket, Mail, Loader2, ArrowRight, Check } from "lucide-react";
 
 export default function LoginModal({ isOpen, setIsOpen }) {
-  const [authMode, setAuthMode] = useState('choice'); // 'choice', 'login', 'signup', 'verify', 'forgot'
+  const [authMode, setAuthMode] = useState('choice'); // 'choice', 'email', 'otp'
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
+  const [otp, setOtp] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
@@ -24,74 +23,7 @@ export default function LoginModal({ isOpen, setIsOpen }) {
     User.loginWithRedirect(window.location.href);
   };
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    if (!email.trim() || !password.trim()) {
-      setError('נא למלא את כל השדות');
-      return;
-    }
-
-    setIsLoading(true);
-    setError('');
-
-    try {
-      await User.loginWithPassword(email, password);
-      setSuccessMessage('התחברת בהצלחה!');
-      setTimeout(() => {
-        setIsOpen(false);
-        window.location.reload();
-      }, 1000);
-    } catch (err) {
-      if (err.message?.includes('Invalid login credentials')) {
-        setError('מייל או סיסמה שגויים');
-      } else if (err.message?.includes('Email not confirmed')) {
-        setError('יש לאמת את המייל קודם. בדוק את תיבת הדואר שלך.');
-      } else {
-        setError(err.message || 'שגיאה בהתחברות. נסה שוב.');
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleSignup = async (e) => {
-    e.preventDefault();
-    if (!email.trim() || !password.trim()) {
-      setError('נא למלא את כל השדות');
-      return;
-    }
-    if (password.length < 6) {
-      setError('הסיסמה חייבת להכיל לפחות 6 תווים');
-      return;
-    }
-
-    setIsLoading(true);
-    setError('');
-
-    try {
-      const result = await User.signUpWithPassword(email, password, window.location.href);
-      if (result.user && !result.user.confirmed_at) {
-        setAuthMode('verify');
-        setSuccessMessage('נרשמת בהצלחה! שלחנו לך מייל לאימות.');
-      } else {
-        setSuccessMessage('נרשמת והתחברת בהצלחה!');
-        setTimeout(() => {
-          setIsOpen(false);
-          window.location.reload();
-        }, 1000);
-      }
-    } catch (err) {
-      if (err.message?.includes('already registered')) {
-        setError('כתובת המייל הזו כבר רשומה. נסה להתחבר.');
-      } else {
-        setError(err.message || 'שגיאה בהרשמה. נסה שוב.');
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleForgotPassword = async (e) => {
+  const handleEmailSubmit = async (e) => {
     e.preventDefault();
     if (!email.trim()) {
       setError('נא להזין כתובת מייל');
@@ -102,10 +34,35 @@ export default function LoginModal({ isOpen, setIsOpen }) {
     setError('');
 
     try {
-      await User.resetPassword(email, window.location.href);
-      setSuccessMessage('שלחנו לך מייל לאיפוס הסיסמה');
+      await User.loginWithEmail(email, window.location.href);
+      setSuccessMessage('קוד אימות נשלח למייל שלך! בדוק גם בתיקיית הספאם.');
+      setAuthMode('otp');
     } catch (err) {
       setError(err.message || 'שגיאה בשליחת המייל. נסה שוב.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleOtpSubmit = async (e) => {
+    e.preventDefault();
+    if (!otp.trim()) {
+      setError('נא להזין את הקוד');
+      return;
+    }
+
+    setIsLoading(true);
+    setError('');
+
+    try {
+      await User.verifyOtp(email, otp);
+      setSuccessMessage('התחברת בהצלחה!');
+      setTimeout(() => {
+        setIsOpen(false);
+        window.location.reload();
+      }, 1000);
+    } catch (err) {
+      setError('הקוד שגוי או פג תוקף. נסה שוב.');
     } finally {
       setIsLoading(false);
     }
@@ -114,10 +71,9 @@ export default function LoginModal({ isOpen, setIsOpen }) {
   const resetModal = () => {
     setAuthMode('choice');
     setEmail('');
-    setPassword('');
+    setOtp('');
     setError('');
     setSuccessMessage('');
-    setShowPassword(false);
   };
 
   return (
@@ -129,29 +85,25 @@ export default function LoginModal({ isOpen, setIsOpen }) {
           </div>
           <DialogTitle className="text-2xl font-bold text-gray-900 text-center">
             {authMode === 'choice' && 'כמעט שם!'}
-            {authMode === 'login' && 'התחברות'}
-            {authMode === 'signup' && 'הרשמה'}
-            {authMode === 'verify' && 'אמת את המייל שלך'}
-            {authMode === 'forgot' && 'שכחתי סיסמה'}
+            {authMode === 'email' && 'התחברות/הרשמה עם מייל'}
+            {authMode === 'otp' && 'הזן את הקוד'}
           </DialogTitle>
           <DialogDescription className="text-gray-600 pt-2 text-center">
             {authMode === 'choice' && (
               <>
                 כדי ליצור קאברים ויראליים, צריך להתחבר למערכת.
                 <br />
-                בחר את אופן ההתחברות המועדף עליך.
+                בחר את אופן ההתחברות - אין צורך בסיסמה!
               </>
             )}
-            {authMode === 'login' && 'הזן את פרטי ההתחברות שלך'}
-            {authMode === 'signup' && 'צור חשבון חדש'}
-            {authMode === 'verify' && (
+            {authMode === 'email' && 'הזן את המייל שלך ונשלח לך קוד אימות'}
+            {authMode === 'otp' && (
               <>
-                שלחנו לינק אימות ל-<strong>{email}</strong>
+                שלחנו קוד ל-<strong>{email}</strong>
                 <br />
-                לחץ על הלינק במייל כדי להשלים את ההרשמה
+                העתק אותו לכאן (בדוק גם בספאם)
               </>
             )}
-            {authMode === 'forgot' && 'נשלח לך לינק לאיפוס הסיסמה'}
           </DialogDescription>
         </DialogHeader>
 
@@ -161,7 +113,7 @@ export default function LoginModal({ isOpen, setIsOpen }) {
           </div>
         )}
 
-        {successMessage && (
+        {successMessage && authMode === 'otp' && (
           <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm flex items-center gap-2">
             <Check className="w-4 h-4" />
             {successMessage}
@@ -184,16 +136,6 @@ export default function LoginModal({ isOpen, setIsOpen }) {
                 התחברות עם Google
               </Button>
 
-              <Button
-                onClick={() => User.loginWithFacebook(window.location.href)}
-                className="w-full h-12 text-base bg-[#1877F2] hover:bg-[#166FE5] text-white border-0"
-              >
-                <svg className="w-5 h-5 ml-2" viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
-                </svg>
-                התחברות עם Facebook
-              </Button>
-
               <div className="relative">
                 <div className="absolute inset-0 flex items-center">
                   <span className="w-full border-t border-gray-200" />
@@ -204,18 +146,18 @@ export default function LoginModal({ isOpen, setIsOpen }) {
               </div>
 
               <Button
-                onClick={() => setAuthMode('login')}
+                onClick={() => setAuthMode('email')}
                 variant="outline"
                 className="w-full h-12 text-base border-gray-300 hover:bg-gray-50"
               >
                 <Mail className="w-5 h-5 ml-2" />
-                התחברות עם מייל וסיסמה
+                התחברות עם מייל (קוד גישה)
               </Button>
             </>
           )}
 
-          {authMode === 'login' && (
-            <form onSubmit={handleLogin} className="space-y-4">
+          {authMode === 'email' && (
+            <form onSubmit={handleEmailSubmit} className="space-y-4">
               <Input
                 type="email"
                 placeholder="כתובת המייל שלך"
@@ -225,92 +167,6 @@ export default function LoginModal({ isOpen, setIsOpen }) {
                 dir="ltr"
                 disabled={isLoading}
               />
-              <div className="relative">
-                <Input
-                  type={showPassword ? "text" : "password"}
-                  placeholder="סיסמה"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="h-12 text-base pr-12"
-                  dir="ltr"
-                  disabled={isLoading}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
-              </div>
-              <Button
-                type="submit"
-                disabled={isLoading}
-                className="w-full h-12 text-base btn-gradient text-white shadow-lg"
-              >
-                {isLoading ? (
-                  <Loader2 className="w-5 h-5 animate-spin ml-2" />
-                ) : (
-                  <LogIn className="w-5 h-5 ml-2" />
-                )}
-                {isLoading ? 'מתחבר...' : 'התחבר'}
-              </Button>
-              <div className="flex justify-between text-sm">
-                <button
-                  type="button"
-                  onClick={() => { setAuthMode('signup'); setError(''); }}
-                  className="text-purple-600 hover:text-purple-700"
-                >
-                  אין לך חשבון? הירשם
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { setAuthMode('forgot'); setError(''); }}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  שכחתי סיסמה
-                </button>
-              </div>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => { setAuthMode('choice'); setError(''); }}
-                className="w-full text-gray-500 hover:text-gray-700"
-              >
-                חזרה
-              </Button>
-            </form>
-          )}
-
-          {authMode === 'signup' && (
-            <form onSubmit={handleSignup} className="space-y-4">
-              <Input
-                type="email"
-                placeholder="כתובת המייל שלך"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="h-12 text-base"
-                dir="ltr"
-                disabled={isLoading}
-              />
-              <div className="relative">
-                <Input
-                  type={showPassword ? "text" : "password"}
-                  placeholder="בחר סיסמה (לפחות 6 תווים)"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="h-12 text-base pr-12"
-                  dir="ltr"
-                  disabled={isLoading}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
-                >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
-              </div>
               <Button
                 type="submit"
                 disabled={isLoading}
@@ -321,42 +177,7 @@ export default function LoginModal({ isOpen, setIsOpen }) {
                 ) : (
                   <ArrowRight className="w-5 h-5 ml-2" />
                 )}
-                {isLoading ? 'נרשם...' : 'הירשם'}
-              </Button>
-              <button
-                type="button"
-                onClick={() => { setAuthMode('login'); setError(''); }}
-                className="w-full text-sm text-purple-600 hover:text-purple-700"
-              >
-                כבר יש לך חשבון? התחבר
-              </button>
-              <Button
-                type="button"
-                variant="ghost"
-                onClick={() => { setAuthMode('choice'); setError(''); }}
-                className="w-full text-gray-500 hover:text-gray-700"
-              >
-                חזרה
-              </Button>
-            </form>
-          )}
-
-          {authMode === 'verify' && (
-            <div className="space-y-4 text-center">
-              <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
-                <Mail className="w-8 h-8 text-green-600" />
-              </div>
-              <p className="text-gray-600">
-                בדוק את המייל שלך ולחץ על לינק האימות.
-                <br />
-                <span className="text-sm text-gray-500">בדוק גם בתיקיית הספאם</span>
-              </p>
-              <Button
-                type="button"
-                onClick={() => { setAuthMode('login'); setSuccessMessage(''); }}
-                className="w-full h-12 text-base btn-gradient text-white shadow-lg"
-              >
-                אימתתי, אני רוצה להתחבר
+                {isLoading ? 'שולח...' : 'שלח קוד גישה'}
               </Button>
               <Button
                 type="button"
@@ -366,39 +187,40 @@ export default function LoginModal({ isOpen, setIsOpen }) {
               >
                 חזרה
               </Button>
-            </div>
+            </form>
           )}
 
-          {authMode === 'forgot' && (
-            <form onSubmit={handleForgotPassword} className="space-y-4">
+          {authMode === 'otp' && (
+            <form onSubmit={handleOtpSubmit} className="space-y-4">
               <Input
-                type="email"
-                placeholder="כתובת המייל שלך"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="h-12 text-base"
+                type="text"
+                placeholder="הזן את הקוד (למשל: 123456)"
+                value={otp}
+                onChange={(e) => setOtp(e.target.value)}
+                className="h-12 text-base text-center tracking-widest"
                 dir="ltr"
                 disabled={isLoading}
+                maxLength={6}
               />
               <Button
                 type="submit"
-                disabled={isLoading || successMessage}
+                disabled={isLoading}
                 className="w-full h-12 text-base btn-gradient text-white shadow-lg"
               >
                 {isLoading ? (
                   <Loader2 className="w-5 h-5 animate-spin ml-2" />
                 ) : (
-                  <Mail className="w-5 h-5 ml-2" />
+                  <LogIn className="w-5 h-5 ml-2" />
                 )}
-                {isLoading ? 'שולח...' : 'שלח לינק איפוס'}
+                {isLoading ? 'מאמת...' : 'התחבר'}
               </Button>
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => { setAuthMode('login'); setError(''); setSuccessMessage(''); }}
+                onClick={() => { setAuthMode('email'); setOtp(''); setError(''); }}
                 className="w-full text-gray-500 hover:text-gray-700"
               >
-                חזרה להתחברות
+                שלח קוד חדש
               </Button>
             </form>
           )}
