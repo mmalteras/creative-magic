@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { User } from '@/api/entities';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +18,7 @@ export default function LoginModal({ isOpen, setIsOpen }) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
 
   const handleGoogleLogin = () => {
     User.loginWithRedirect(window.location.href);
@@ -35,14 +36,23 @@ export default function LoginModal({ isOpen, setIsOpen }) {
 
     try {
       await User.loginWithEmail(email, window.location.href);
-      setSuccessMessage('קישור התחברות נשלח למייל שלך! בדוק גם בספאם.');
-      setAuthMode('otp');
+      setSuccessMessage('קישור התחברות נשלח למייל שלך!');
+      setAuthMode('emailSent');
+      setResendCooldown(60); // Start 60 second cooldown
     } catch (err) {
       setError(err.message || 'שגיאה בשליחת המייל. נסה שוב.');
     } finally {
       setIsLoading(false);
     }
   };
+
+  // Countdown timer for resend button
+  useEffect(() => {
+    if (resendCooldown > 0) {
+      const timer = setTimeout(() => setResendCooldown(resendCooldown - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendCooldown]);
 
   const handleOtpSubmit = async (e) => {
     e.preventDefault();
@@ -86,7 +96,7 @@ export default function LoginModal({ isOpen, setIsOpen }) {
           <DialogTitle className="text-2xl font-bold text-gray-900 text-center">
             {authMode === 'choice' && 'כמעט שם!'}
             {authMode === 'email' && 'התחברות עם מייל'}
-            {authMode === 'otp' && 'הזן את הקוד'}
+            {authMode === 'emailSent' && 'בדוק את המייל שלך!'}
           </DialogTitle>
           <DialogDescription className="text-gray-600 pt-2 text-center">
             {authMode === 'choice' && (
@@ -97,11 +107,13 @@ export default function LoginModal({ isOpen, setIsOpen }) {
               </>
             )}
             {authMode === 'email' && 'נשלח לך קישור התחברות למייל'}
-            {authMode === 'otp' && (
+            {authMode === 'emailSent' && (
               <>
-                שלחנו קישור ל-<strong>{email}</strong>
+                שלחנו קישור התחברות ל-<strong>{email}</strong>
                 <br />
-                לחץ על הקישור במייל או הזן את הקוד שקיבלת
+                לחץ על הקישור במייל כדי להתחבר.
+                <br />
+                <span className="text-sm text-gray-500">בדוק גם בתיקיית הספאם</span>
               </>
             )}
           </DialogDescription>
@@ -113,7 +125,7 @@ export default function LoginModal({ isOpen, setIsOpen }) {
           </div>
         )}
 
-        {successMessage && authMode === 'otp' && (
+        {successMessage && authMode === 'emailSent' && (
           <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm flex items-center gap-2">
             <Check className="w-4 h-4" />
             {successMessage}
@@ -212,39 +224,34 @@ export default function LoginModal({ isOpen, setIsOpen }) {
             </form>
           )}
 
-          {authMode === 'otp' && (
-            <form onSubmit={handleOtpSubmit} className="space-y-4">
-              <Input
-                type="text"
-                placeholder="הזן את הקוד מהמייל"
-                value={otp}
-                onChange={(e) => setOtp(e.target.value)}
-                className="h-12 text-base text-center tracking-widest"
-                dir="ltr"
-                disabled={isLoading}
-                maxLength={6}
-              />
+          {authMode === 'emailSent' && (
+            <div className="space-y-4 text-center">
+              <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
+                <Mail className="w-8 h-8 text-green-600" />
+              </div>
+              <p className="text-gray-600">
+                פתח את המייל שלך ולחץ על הקישור שקיבלת.
+                <br />
+                החלון הזה ייסגר אוטומטית לאחר ההתחברות.
+              </p>
               <Button
-                type="submit"
-                disabled={isLoading}
-                className="w-full h-12 text-base btn-gradient text-white shadow-lg"
+                type="button"
+                variant="outline"
+                onClick={() => { setAuthMode('email'); setError(''); setSuccessMessage(''); }}
+                className="w-full text-gray-600 hover:text-gray-800"
+                disabled={resendCooldown > 0}
               >
-                {isLoading ? (
-                  <Loader2 className="w-5 h-5 animate-spin ml-2" />
-                ) : (
-                  <LogIn className="w-5 h-5 ml-2" />
-                )}
-                {isLoading ? 'מאמת...' : 'התחבר'}
+                {resendCooldown > 0 ? `שלח שוב (${resendCooldown})` : 'שלח שוב'}
               </Button>
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => { setAuthMode('email'); setOtp(''); setError(''); }}
+                onClick={() => setAuthMode('choice')}
                 className="w-full text-gray-500 hover:text-gray-700"
               >
-                שלח קוד חדש
+                חזרה
               </Button>
-            </form>
+            </div>
           )}
         </div>
       </DialogContent>
