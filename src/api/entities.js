@@ -133,7 +133,30 @@ export const User = {
         if (error) throw error;
     },
 
-    // Login with Magic Link (email OTP)
+    // Sign up with Email + Password (new users)
+    async signUpWithPassword(email, password, redirectUrl) {
+        const { data, error } = await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+                emailRedirectTo: redirectUrl || window.location.origin
+            }
+        });
+        if (error) throw error;
+        return data;
+    },
+
+    // Login with Email + Password (existing users)
+    async loginWithPassword(email, password) {
+        const { data, error } = await supabase.auth.signInWithPassword({
+            email,
+            password
+        });
+        if (error) throw error;
+        return data;
+    },
+
+    // Login with Magic Link (email OTP) - kept as backup
     async loginWithEmail(email, redirectUrl) {
         const { error } = await supabase.auth.signInWithOtp({
             email,
@@ -154,6 +177,15 @@ export const User = {
         });
         if (error) throw error;
         return data;
+    },
+
+    // Reset password
+    async resetPassword(email, redirectUrl) {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: redirectUrl || `${window.location.origin}/reset-password`
+        });
+        if (error) throw error;
+        return { success: true };
     },
 
     async logout() {
