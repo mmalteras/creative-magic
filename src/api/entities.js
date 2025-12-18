@@ -100,6 +100,28 @@ export const User = {
         }
     },
 
+    // Update user profile
+    async update(userId, updates) {
+        // First, try to upsert (insert or update) the user profile
+        const { data, error } = await supabase
+            .from('user_profiles')
+            .upsert({
+                id: userId,
+                ...updates,
+                updated_at: new Date().toISOString()
+            }, {
+                onConflict: 'id'
+            })
+            .select()
+            .single();
+
+        if (error) {
+            console.error('Error updating user profile:', error);
+            throw error;
+        }
+        return data;
+    },
+
     // Login with Google (via Supabase's built-in OAuth)
     async loginWithRedirect(redirectUrl) {
         const { error } = await supabase.auth.signInWithOAuth({
