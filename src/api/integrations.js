@@ -149,7 +149,7 @@ export async function CreateFileSignedUrl({ path, expiresIn = 3600 }) {
     return { signed_url: data?.signedUrl };
 }
 
-// GenerateImage - Using Gemini Imagen 3
+// GenerateImage - Using Nano Banana Pro (Gemini 3 Pro Image) with 4K resolution
 export async function GenerateImage({ prompt, width = 1024, height = 1024 }) {
     // Determine aspect ratio based on dimensions
     let aspectRatio = '1:1';
@@ -160,18 +160,19 @@ export async function GenerateImage({ prompt, width = 1024, height = 1024 }) {
     }
 
     const res = await fetch(
-        `${GEMINI_API_URL}/models/imagen-3.0-generate-001:predict?key=${GEMINI_API_KEY}`,
+        `${GEMINI_API_URL}/models/gemini-3-pro-image-preview:generateContent?key=${GEMINI_API_KEY}`,
         {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                instances: [{ prompt }],
-                parameters: {
-                    sampleCount: 1,
-                    aspectRatio,
-                    personGeneration: 'allow_adult',
-                    outputOptions: {
-                        mimeType: 'image/png'
+                contents: [{
+                    parts: [{ text: prompt }]
+                }],
+                generationConfig: {
+                    responseModalities: ['TEXT', 'IMAGE'],
+                    imageConfig: {
+                        aspectRatio: aspectRatio,
+                        imageSize: '4K'
                     }
                 }
             })
@@ -181,12 +182,19 @@ export async function GenerateImage({ prompt, width = 1024, height = 1024 }) {
     const data = await res.json();
 
     if (data.error) {
-        console.error('Imagen API Error:', data.error);
+        console.error('Nano Banana Pro Error:', data.error);
         throw new Error(data.error.message || 'Image generation failed');
     }
 
+    // Find image in response
+    const imagePart = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+
+    if (!imagePart) {
+        throw new Error('No image generated');
+    }
+
     return {
-        imageBase64: data.predictions?.[0]?.bytesBase64Encoded
+        imageBase64: imagePart.inlineData.data
     };
 }
 

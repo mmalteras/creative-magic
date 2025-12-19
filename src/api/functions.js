@@ -104,25 +104,26 @@ Important instructions:
     return generatePureImage(text_prompt, aspectRatio);
 }
 
-// Pure image generation without reference
+// Pure image generation without reference - using Nano Banana Pro (Gemini 3 Pro Image) with 4K
 async function generatePureImage(prompt, aspectRatio = '16:9') {
     const enhancedPrompt = `${prompt}
 
-Style: Ultra-realistic, cinematic, professional photography quality, 4K resolution, dramatic lighting, vibrant colors, viral YouTube thumbnail style.`;
+Style: Ultra-realistic, cinematic, professional photography quality, dramatic lighting, vibrant colors, viral YouTube thumbnail style.`;
 
     const res = await fetch(
-        `${GEMINI_API_URL}/models/imagen-3.0-generate-001:predict?key=${GEMINI_API_KEY}`,
+        `${GEMINI_API_URL}/models/gemini-3-pro-image-preview:generateContent?key=${GEMINI_API_KEY}`,
         {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                instances: [{ prompt: enhancedPrompt }],
-                parameters: {
-                    sampleCount: 1,
-                    aspectRatio,
-                    personGeneration: 'allow_adult',
-                    outputOptions: {
-                        mimeType: 'image/png'
+                contents: [{
+                    parts: [{ text: enhancedPrompt }]
+                }],
+                generationConfig: {
+                    responseModalities: ['TEXT', 'IMAGE'],
+                    imageConfig: {
+                        aspectRatio: aspectRatio,
+                        imageSize: '4K'
                     }
                 }
             })
@@ -132,19 +133,20 @@ Style: Ultra-realistic, cinematic, professional photography quality, 4K resoluti
     const data = await res.json();
 
     if (data.error) {
-        console.error('Imagen 3 Error:', data.error);
+        console.error('Nano Banana Pro Error:', data.error);
         throw new Error(data.error.message || 'Image generation failed');
     }
 
-    const imageBase64 = data.predictions?.[0]?.bytesBase64Encoded;
+    // Find image in response
+    const imagePart = data.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
 
-    if (!imageBase64) {
+    if (!imagePart) {
         throw new Error('No image generated');
     }
 
     return {
         data: {
-            imagesBase64: [imageBase64]
+            imagesBase64: [imagePart.inlineData.data]
         }
     };
 }
