@@ -26,40 +26,89 @@ export default function Layout({ children, currentPageName }) {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [activeLegalModal, setActiveLegalModal] = useState(null);
 
-  useEffect(() => {
-    const fetchUserAndGrantCredits = async () => {
-      setAuthLoading(true);
-      try {
-        const userData = await User.me();
+  // Fetch user data and grant initial credits
+  const loadUser = async () => {
+    try {
+      const userData = await User.me();
+      if (!userData) {
+        setUser(null);
+        return;
+      }
 
-        if (userData && !userData.free_credits_claimed) {
+      // Grant free credits for new users
+      if (!userData.free_credits_claimed) {
+        try {
           await User.update(userData.id, {
             credits: (userData.credits || 0) + 4,
             free_credits_claimed: true
           });
           const updatedUserData = await User.me();
           setUser(updatedUserData);
-        } else {
-          setUser(userData);
+        } catch (updateError) {
+          console.warn('Could not grant free credits:', updateError);
+          setUser(userData); // Still set user even if credit grant fails
+        }
+      } else {
+        setUser(userData);
+      }
+    } catch (e) {
+      console.error('Error loading user:', e);
+      setUser(null);
+    }
+  };
+
+  useEffect(() => {
+    let mounted = true;
+
+    const initAuth = async () => {
+      setAuthLoading(true);
+
+      // First, check for existing session (important for OAuth callback!)
+      try {
+        const session = await User.getSession();
+        console.log('Initial session check:', session ? 'Found session' : 'No session');
+
+        if (session && mounted) {
+          await loadUser();
         }
       } catch (e) {
-        setUser(null);
-      } finally {
+        console.error('Session check error:', e);
+      }
+
+      if (mounted) {
         setAuthLoading(false);
       }
     };
-    fetchUserAndGrantCredits();
+
+    initAuth();
 
     // Listen for auth state changes (OAuth redirects, sign in, sign out)
     const { data: { subscription } } = User.onAuthStateChange((event, session) => {
+      console.log('Auth state changed:', event, session ? 'has session' : 'no session');
+
+      if (!mounted) return;
+
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        fetchUserAndGrantCredits();
+        loadUser().then(() => {
+          if (mounted) setAuthLoading(false);
+        });
       } else if (event === 'SIGNED_OUT') {
         setUser(null);
+        setAuthLoading(false);
+      } else if (event === 'INITIAL_SESSION') {
+        // This fires after OAuth callback - session is already processed
+        if (session) {
+          loadUser().then(() => {
+            if (mounted) setAuthLoading(false);
+          });
+        } else {
+          setAuthLoading(false);
+        }
       }
     });
 
     return () => {
+      mounted = false;
       subscription?.unsubscribe();
     };
   }, []);
