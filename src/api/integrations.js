@@ -17,36 +17,27 @@ function blobToBase64(blob) {
 export async function InvokeLLM({ prompt, file_urls = [], response_json_schema }) {
     const parts = [{ text: prompt }];
 
-    // Add images if provided - try URL first, fallback to base64
+    // Add images if provided - fetch via CORS proxy and convert to base64
     for (const url of file_urls) {
         try {
-            // First, try to use file_data with URI (works for public URLs)
-            // This avoids CORS issues
+            // Use a CORS proxy for external images (like YouTube thumbnails)
+            const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+
+            const response = await fetch(proxyUrl);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+            const blob = await response.blob();
+            const base64 = await blobToBase64(blob);
+
             parts.push({
-                file_data: {
-                    mime_type: 'image/jpeg',
-                    file_uri: url
+                inline_data: {
+                    mime_type: blob.type || 'image/jpeg',
+                    data: base64.split(',')[1]
                 }
             });
         } catch (err) {
-            console.warn('Failed to add image URL, trying base64 fallback:', url, err);
-
-            // Fallback: try to fetch and convert to base64
-            try {
-                const response = await fetch(url, { mode: 'cors' });
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                const blob = await response.blob();
-                const base64 = await blobToBase64(blob);
-                parts.push({
-                    inline_data: {
-                        mime_type: blob.type || 'image/jpeg',
-                        data: base64.split(',')[1]
-                    }
-                });
-            } catch (fetchErr) {
-                console.error('Failed to load image (both methods):', url, fetchErr);
-                // Don't throw - continue without the image and let Gemini handle it
-            }
+            console.error('Failed to load image:', url, err);
+            // Continue without the image - Gemini will work with text only
         }
     }
 
